@@ -4,7 +4,8 @@ import { RouterLink } from 'vue-router'
 import { useGame } from './useGame'
 import { GRID_ROWS, GRID_COLS, ANIMATION_DURATION } from './config'
 
-const { board, score, selectedTile, initGame, handleTileClick } = useGame()
+// Thay vì xuất selectedTile và handleTileClick, ta dùng onPointerDown
+const { board, score, initGame, onPointerDown } = useGame()
 
 onMounted(() => {
   initGame()
@@ -17,15 +18,12 @@ onMounted(() => {
 
       <div class="flex flex-col sm:flex-row justify-between items-center mb-10 gap-6 animate-fade-up">
         <div>
-          <h1 class="font-display text-4xl font-bold text-accent-coral tracking-tight uppercase">
-            Neo Gems
-          </h1>
+          <h1 class="font-display text-4xl font-bold text-accent-coral tracking-tight uppercase">Neo Gems</h1>
           <div class="flex items-center gap-2 mt-2">
             <span class="text-accent-amber font-display text-sm tracking-widest">//</span>
             <span class="text-text-secondary text-sm tracking-wide">HỆ THỐNG MATCH-3 NĂNG LƯỢNG</span>
           </div>
         </div>
-
         <div class="flex items-center gap-4">
           <div class="border border-border-default bg-bg-surface px-6 py-3 min-w-[150px] text-center shadow-lg shadow-accent-sky/5">
             <p class="text-xs text-text-dim font-display tracking-widest mb-1">ĐIỂM SỐ</p>
@@ -38,19 +36,19 @@ onMounted(() => {
 
         <div class="flex justify-center w-full">
           <div
-            class="relative border border-border-default bg-bg-surface p-2 shadow-2xl shadow-accent-coral/5"
+            class="relative border border-border-default bg-bg-surface p-2 shadow-2xl shadow-accent-coral/5 touch-none"
             style="width: 100%; max-width: 500px; aspect-ratio: 1/1;"
           >
             <div class="w-full h-full relative overflow-hidden bg-bg-elevated/50">
               <div
                 v-for="tile in board"
                 :key="tile.id"
-                @click="handleTileClick(tile)"
-                class="absolute flex items-center justify-center cursor-pointer select-none transition-all"
+                @pointerdown.prevent="onPointerDown($event, tile)"
+                class="absolute flex items-center justify-center cursor-grab active:cursor-grabbing select-none transition-all"
                 :class="[
                   tile.colorClass,
                   tile.isMatched ? 'opacity-0 scale-50' : 'opacity-100 scale-100',
-                  selectedTile?.id === tile.id ? 'bg-bg-elevated border-2 border-accent-coral ring-4 ring-accent-coral/20' : 'border border-border-default/30 hover:bg-bg-elevated/50'
+                  'border border-border-default/30 hover:bg-bg-elevated/50'
                 ]"
                 :style="{
                   width: `${100 / GRID_COLS}%`,
@@ -59,7 +57,7 @@ onMounted(() => {
                   transitionDuration: `${ANIMATION_DURATION}ms`
                 }"
               >
-                <span class="text-2xl sm:text-3xl md:text-4xl filter drop-shadow-md">
+                <span class="text-2xl sm:text-3xl md:text-4xl filter drop-shadow-md pointer-events-none">
                   {{ tile.icon }}
                 </span>
               </div>
@@ -77,7 +75,7 @@ onMounted(() => {
               Luật chơi
             </h2>
             <ul class="text-sm font-body text-text-secondary space-y-3 leading-relaxed">
-              <li class="flex gap-2"><span class="text-accent-coral">▸</span> Đổi chỗ 2 viên đá cạnh nhau để tạo thành hàng (ngang/dọc) có ít nhất 3 viên cùng màu.</li>
+              <li class="flex gap-2"><span class="text-accent-coral">▸</span> Vuốt (drag/swipe) để đổi chỗ 2 viên đá cạnh nhau tạo thành hàng có ít nhất 3 viên cùng màu.</li>
               <li class="flex gap-2"><span class="text-accent-coral">▸</span> Khi ăn điểm, các viên đá mới sẽ tự động rơi xuống lấp đầy.</li>
               <li class="flex gap-2"><span class="text-accent-coral">▸</span> Tạo combo liên tiếp để đạt điểm cao.</li>
             </ul>
@@ -90,7 +88,6 @@ onMounted(() => {
             >
               LÀM MỚI BẢNG
             </button>
-
             <RouterLink
               to="/"
               class="w-full text-center border border-border-default bg-bg-surface text-text-secondary font-display font-semibold tracking-wide py-3 px-4 transition-all hover:border-accent-sky hover:text-text-primary active:scale-[0.98]"
@@ -104,7 +101,3 @@ onMounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-/* Không cần code CSS phức tạp vì Tailwind + Vue Reactivity (transform absolute) đã xử lý mượt mà animation */
-</style>

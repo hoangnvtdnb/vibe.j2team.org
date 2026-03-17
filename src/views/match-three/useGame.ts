@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useEventListener } from '@vueuse/core'
 import { GRID_ROWS, GRID_COLS, TILE_TYPES, ANIMATION_DURATION } from './config'
 
 export interface Tile {
@@ -14,26 +15,25 @@ export interface Tile {
 export function useGame() {
   const board = ref<Tile[]>([])
   const score = ref(0)
-  const isLocked = ref(false) // Khoá thao tác khi đang có hiệu ứng
-  const selectedTile = ref<Tile | null>(null)
+  const isLocked = ref(false)
+
+  // State hỗ trợ vuốt (swipe)
+  const activeTile = ref<Tile | null>(null)
+  const startPos = ref({ x: 0, y: 0 })
 
   let tileIdCounter = 0
 
-  // Khởi tạo bảng không có sẵn match
   const initGame = () => {
     board.value = []
     score.value = 0
-    selectedTile.value = null
+    activeTile.value = null
     isLocked.value = false
 
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
-        // Gán giá trị mặc định ban đầu để chiều lòng TypeScript
         let randomType = TILE_TYPES[0]!
 
-        // Tránh tạo ra match 3 ngay từ đầu
         do {
-          // Thêm dấu ! ở cuối để khẳng định với TS rằng chắc chắn sẽ lấy được phần tử
           randomType = TILE_TYPES[Math.floor(Math.random() * TILE_TYPES.length)]!
         } while (
           (c >= 2 && getTile(r, c - 1)?.typeId === randomType.id && getTile(r, c - 2)?.typeId === randomType.id) ||
@@ -57,47 +57,62 @@ export function useGame() {
     return board.value.find(t => t.row === row && t.col === col && !t.isMatched)
   }
 
-  const handleTileClick = async (tile: Tile) => {
+  // Bắt đầu vuốt
+  const onPointerDown = (e: PointerEvent, tile: Tile) => {
     if (isLocked.value || tile.isMatched) return
+    activeTile.value = tile
+    startPos.value = { x: e.clientX, y: e.clientY }
+  }
 
-    if (!selectedTile.value) {
-      selectedTile.value = tile
-      return
+  // Kết thúc vuốt
+  const onPointerUp = (e: PointerEvent) => {
+    if (!activeTile.value || isLocked.value) return
+
+    const deltaX = e.clientX - startPos.value.x
+    const deltaY = e.clientY - startPos.value.y
+    const SWIPE_THRESHOLD = 30 // Khoảng cách tối thiểu để ghi nhận 1 cú vuốt (pixel)
+
+    // Nếu người dùng có vuốt đủ dài
+    if (Math.abs(deltaX) > SWIPE_THRESHOLD || Math.abs(deltaY) > SWIPE_THRESHOLD) {
+      let targetRow = activeTile.value.row
+      let targetCol = activeTile.value.col
+
+      // Tính toán hướng vuốt (ưu tiên trục có khoảng cách di chuyển dài hơn)
+      if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        targetCol += deltaX > 0 ? 1 : -1 // Vuốt ngang
+      } else {
+        targetRow += deltaY > 0 ? 1 : -1 // Vuốt dọc
+      }
+
+      const targetTile = getTile(targetRow, targetCol)
+      if (targetTile) {
+        attemptSwap(activeTile.value, targetTile)
+      }
     }
 
-    const t1 = selectedTile.value
-    const t2 = tile
+    activeTile.value = null // Reset trạng thái
+  }
 
-    // Nếu bấm lại chính nó thì huỷ chọn
-    if (t1.id === t2.id) {
-      selectedTile.value = null
-      return
-    }
+  // Gắn sự kiện global để bắt thao tác thả chuột/tay ngay cả khi vuốt ra ngoài màn hình
+  if (typeof window !== 'undefined') {
+    useEventListener(window, 'pointerup', onPointerUp)
+  }
 
-    // Kiểm tra xem có kề nhau không
-    const isAdjacent = (Math.abs(t1.row - t2.row) === 1 && t1.col === t2.col) ||
-                       (Math.abs(t1.col - t2.col) === 1 && t1.row === t2.row)
+  const attemptSwap = async (t1: Tile, t2: Tile) => {
+    isLocked.value = true
 
-    if (isAdjacent) {
-      isLocked.value = true
-      selectedTile.value = null
+    // Đổi vị trí tạm thời
+    swapTiles(t1, t2)
+    await delay(ANIMATION_DURATION)
 
-      // Đổi vị trí tạm thời
+    const matches = findMatches()
+    if (matches.length > 0) {
+      await processMatches(matches)
+    } else {
+      // Không có match -> đổi ngược lại
       swapTiles(t1, t2)
       await delay(ANIMATION_DURATION)
-
-      const matches = findMatches()
-      if (matches.length > 0) {
-        await processMatches(matches)
-      } else {
-        // Không có match -> đổi ngược lại
-        swapTiles(t1, t2)
-        await delay(ANIMATION_DURATION)
-        isLocked.value = false
-      }
-    } else {
-      // Chọn viên mới nếu bấm viên không kề cạnh
-      selectedTile.value = tile
+      isLocked.value = false
     }
   }
 
@@ -141,15 +156,12 @@ export function useGame() {
   }
 
   const processMatches = async (matches: Tile[]) => {
-    // 1. Đánh dấu xóa và cộng điểm
     matches.forEach(m => m.isMatched = true)
     score.value += matches.length * 10
-    await delay(ANIMATION_DURATION) // Chờ animation vỡ vụn (fade out)
+    await delay(ANIMATION_DURATION)
 
-    // Xoá hẳn khỏi mảng
     board.value = board.value.filter(t => !t.isMatched)
 
-    // 2. Kéo các viên bên trên xuống
     for (let c = 0; c < GRID_COLS; c++) {
       let emptySpaces = 0
       for (let r = GRID_ROWS - 1; r >= 0; r--) {
@@ -161,7 +173,6 @@ export function useGame() {
         }
       }
 
-      // 3. Tạo viên mới rơi từ trên xuống
       for (let i = 0; i < emptySpaces; i++) {
         const randomType = TILE_TYPES[Math.floor(Math.random() * TILE_TYPES.length)]!
         board.value.push({
@@ -169,16 +180,15 @@ export function useGame() {
           typeId: randomType.id,
           icon: randomType.icon,
           colorClass: randomType.color,
-          row: i,        // Rơi tới vị trí trống
+          row: i,
           col: c,
           isMatched: false
         })
       }
     }
 
-    await delay(ANIMATION_DURATION) // Chờ tile mới rơi xuống
+    await delay(ANIMATION_DURATION)
 
-    // 4. Kiểm tra combo liên tiếp
     const newMatches = findMatches()
     if (newMatches.length > 0) {
       await processMatches(newMatches)
@@ -192,8 +202,7 @@ export function useGame() {
   return {
     board,
     score,
-    selectedTile,
     initGame,
-    handleTileClick
+    onPointerDown
   }
 }
