@@ -1,7 +1,7 @@
 export const ENGINE_ITERATIONS = 5 // Số lần tính toán va chạm mỗi frame để tránh xuyên thấu
 export const GRAVITY = 0.4
-export const FRICTION = 0.85
-export const BOUNCE = 0.3
+export const FRICTION = 0.1
+export const BOUNCE = 0.05
 
 // Kích thước khu vực chơi mô phỏng
 export const BOARD_WIDTH = 400

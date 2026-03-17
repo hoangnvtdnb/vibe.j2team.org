@@ -84,19 +84,21 @@ const handlePointerMove = (e: PointerEvent) => {
               :style="{
                 left: `${(dropX / BOARD_WIDTH) * 100}%`,
                 top: '0px',
-                width: `${currentFruitType.radius * 2}px`,
-                height: `${currentFruitType.radius * 2}px`,
+                width: `${(currentFruitType.radius * 2 / BOARD_WIDTH) * 100}%`,
+                height: `${(currentFruitType.radius * 2 / BOARD_HEIGHT) * 100}%`,
                 transform: 'translate(-50%, 0)'
               }"
             >
-              <span class="text-4xl filter drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]">{{ currentFruitType.icon }}</span>
+              <svg viewBox="0 0 100 100" class="w-full h-full overflow-visible filter drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
+                <text x="50" y="50" dominant-baseline="central" text-anchor="middle" font-size="80">{{ currentFruitType.icon }}</text>
+              </svg>
               <div class="absolute top-full left-1/2 w-[1px] h-[600px] bg-text-dim/20 -translate-x-1/2 hidden group-hover:block"></div>
             </div>
 
             <div
               v-for="fruit in fruits"
               :key="fruit.id"
-              class="absolute flex items-center justify-center select-none"
+              class="absolute flex items-center justify-center select-none rounded-full border border-current/20 bg-current/5 shadow-[inset_0_0_10px_currentColor]"
               :class="fruit.colorClass"
               :style="{
                 left: `${(fruit.x / BOARD_WIDTH) * 100}%`,
@@ -106,9 +108,9 @@ const handlePointerMove = (e: PointerEvent) => {
                 transform: 'translate(-50%, -50%)'
               }"
             >
-              <span class="filter drop-shadow-md" style="font-size: calc(1.3 * 100%); line-height: 1;">
-                {{ fruit.icon }}
-              </span>
+              <svg viewBox="0 0 100 100" class="w-full h-full overflow-visible">
+                <text x="50" y="54" dominant-baseline="central" text-anchor="middle" font-size="75">{{ fruit.icon }}</text>
+              </svg>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { ref, onUnmounted } from 'vue'
 import { useStorage, useEventListener } from '@vueuse/core'
-import { FRUIT_TYPES, BOARD_WIDTH, BOARD_HEIGHT, GRAVITY, BOUNCE, FRICTION, ENGINE_ITERATIONS } from './config'
+import { FRUIT_TYPES, BOARD_WIDTH, BOARD_HEIGHT, GRAVITY, BOUNCE, FRICTION, ENGINE_ITERATIONS, type FruitData } from './config'
 
 export interface Fruit {
   id: number
@@ -19,15 +19,15 @@ export interface Fruit {
 export type GameStatus = 'idle' | 'playing' | 'gameover'
 
 export function useGame() {
-  const fruits = ref<Fruit[]>([])
+const fruits = ref<Fruit[]>([])
   const score = ref(0)
   const highScore = useStorage('quantum_mergers_highscore', 0)
   const gameStatus = ref<GameStatus>('idle')
 
-  // Trái cây đang chờ thả
-  const currentFruitType = ref(FRUIT_TYPES[0])
-  const nextFruitType = ref(FRUIT_TYPES[1])
-  const dropX = ref(BOARD_WIDTH / 2) // Vị trí chuột/cảm ứng để thả
+  // Sửa 2 dòng này: Khai báo rõ kiểu <FruitData> và thêm dấu ! ở cuối
+  const currentFruitType = ref<FruitData>(FRUIT_TYPES[0]!)
+  const nextFruitType = ref<FruitData>(FRUIT_TYPES[1]!)
+  const dropX = ref(BOARD_WIDTH / 2)
 
   let fruitIdCounter = 0
   let animationFrameId: number
@@ -129,7 +129,7 @@ export function useGame() {
           const f1 = currentFruits[i]
           const f2 = currentFruits[j]
 
-          if (f1.isMerged || f2.isMerged) continue
+          if (!f1 || !f2 || f1.isMerged || f2.isMerged) continue
 
           const dx = f2.x - f1.x
           const dy = f2.y - f1.y
@@ -145,26 +145,50 @@ export function useGame() {
               continue
             }
 
-            // Đẩy ra xa nhau (Resolve Overlap)
+            // 1. TÍNH TOÁN KHỐI LƯỢNG (Mass)
+            // Khối lượng tỉ lệ thuận với diện tích (bán kính bình phương)
+            const m1 = f1.radius * f1.radius
+            const m2 = f2.radius * f2.radius
+            const totalMass = m1 + m2
+
+            // Tỉ lệ phản lực: Quả nào nhẹ hơn sẽ bị đẩy đi nhiều hơn
+            const ratio1 = m2 / totalMass
+            const ratio2 = m1 / totalMass
+
+            // 2. ĐẨY NHAU RA (Position Resolution)
             const overlap = minDist - dist
             const nx = dx / dist
             const ny = dy / dist
 
-            const massRatio = 0.5
-            f1.x -= nx * overlap * massRatio
-            f1.y -= ny * overlap * massRatio
-            f2.x += nx * overlap * massRatio
-            f2.y += ny * overlap * massRatio
+            // Hệ số làm mềm (chỉ đẩy 80% overlap để tránh giật khung hình)
+            const correction = overlap * 0.8
+            f1.x -= nx * correction * ratio1
+            f1.y -= ny * correction * ratio1
+            f2.x += nx * correction * ratio2
+            f2.y += ny * correction * ratio2
 
-            // Trao đổi lực (Velocity) có giảm xóc
-            const relVx = f2.vx - f1.vx
-            const relVy = f2.vy - f1.vy
-            const damping = 0.5 // Độ hấp thụ lực
+            // 3. XỬ LÝ ĐỘ NẢY (Velocity / Restitution)
+            const rvx = f2.vx - f1.vx
+            const rvy = f2.vy - f1.vy
+            // Vận tốc tương đối dọc theo trục va chạm
+            const velAlongNormal = rvx * nx + rvy * ny
 
-            f1.vx += nx * relVx * damping
-            f1.vy += ny * relVy * damping
-            f2.vx -= nx * relVx * damping
-            f2.vy -= ny * relVy * damping
+            // CHỈ xử lý nảy nếu 2 quả đang lao vào nhau (velAlongNormal < 0)
+            // Nếu đang tách nhau ra rồi thì thôi không cộng thêm lực nữa
+            if (velAlongNormal < 0) {
+              // Hệ số nảy (Bounciness): Game này cần cảm giác nặng, squishy nên set rất thấp (0.1)
+              const e = 0.1
+
+              // Lực đẩy Impulse
+              const j = -(1 + e) * velAlongNormal
+              const impulseX = nx * j
+              const impulseY = ny * j
+
+              f1.vx -= impulseX * ratio1
+              f1.vy -= impulseY * ratio1
+              f2.vx += impulseX * ratio2
+              f2.vy += impulseY * ratio2
+            }
           }
         }
       }
