@@ -35,15 +35,25 @@ const handlePointerMove = (e: PointerEvent) => {
           </div>
         </div>
 
-        <div class="flex flex-wrap justify-center items-center gap-3 sm:gap-4">
-          <div class="border border-border-default bg-bg-surface px-6 py-3 min-w-[120px] text-center shadow-lg hover:border-accent-amber transition-colors">
+        <div class="flex flex-wrap justify-center items-stretch gap-3 sm:gap-4">
+
+          <div class="border border-border-default bg-bg-surface px-6 py-3 min-w-[120px] text-center shadow-lg hover:border-accent-sky transition-colors flex flex-col justify-between">
+            <p class="text-xs text-text-dim font-display tracking-widest mb-1">NEXT</p>
+            <div class="font-display text-2xl font-bold flex-1 flex items-center justify-center" :class="nextFruitType.color">
+              <span class="filter drop-shadow-md leading-none">{{ nextFruitType.icon }}</span>
+            </div>
+          </div>
+
+          <div class="border border-border-default bg-bg-surface px-6 py-3 min-w-[120px] text-center shadow-lg hover:border-accent-amber transition-colors flex flex-col justify-between">
             <p class="text-xs text-text-dim font-display tracking-widest mb-1">SCORE</p>
-            <p class="font-display text-2xl font-bold text-accent-amber">{{ score }}</p>
+            <p class="font-display text-2xl font-bold text-accent-amber leading-none">{{ score }}</p>
           </div>
-          <div class="border border-border-default bg-bg-surface px-6 py-3 min-w-[120px] text-center shadow-lg hover:border-accent-coral transition-colors">
+
+          <div class="border border-border-default bg-bg-surface px-6 py-3 min-w-[120px] text-center shadow-lg hover:border-accent-coral transition-colors flex flex-col justify-between">
             <p class="text-xs text-text-dim font-display tracking-widest mb-1">HIGH SCORE</p>
-            <p class="font-display text-2xl font-bold text-accent-coral">{{ highScore }}</p>
+            <p class="font-display text-2xl font-bold text-accent-coral leading-none">{{ highScore }}</p>
           </div>
+
         </div>
       </div>
 
@@ -116,13 +126,6 @@ const handlePointerMove = (e: PointerEvent) => {
         </div>
 
         <div class="flex flex-col gap-6 w-full max-w-[500px] mx-auto lg:mx-0 animate-fade-up animate-delay-3">
-
-          <div class="border border-border-default bg-bg-surface p-6 flex flex-col items-center justify-center hover:border-accent-sky transition-colors relative">
-            <p class="absolute top-2 left-3 text-xs text-text-dim font-display tracking-widest">NEXT ITEM</p>
-            <div class="mt-4 flex items-center justify-center w-24 h-24 border border-border-default/50 bg-bg-deep rounded-full shadow-inner">
-              <span class="text-5xl filter drop-shadow-lg" :class="nextFruitType.color">{{ nextFruitType.icon }}</span>
-            </div>
-          </div>
 
           <div class="border border-border-default bg-bg-surface p-6 transition-all duration-300 hover:border-accent-coral relative overflow-hidden group">
             <span class="absolute top-3 right-4 font-display text-6xl font-bold text-accent-coral/5 select-none pointer-events-none transition-transform group-hover:scale-110">02</span>
