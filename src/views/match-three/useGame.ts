@@ -12,27 +12,32 @@ export interface Tile {
   isMatched: boolean
 }
 
+export type GameStatus = 'playing' | 'won' | 'lost'
+
 export function useGame() {
   const board = ref<Tile[]>([])
-  const score = ref(0)
   const isLocked = ref(false)
 
-  // State hỗ trợ vuốt (swipe)
+  // State cơ chế Level
+  const level = ref(1)
+  const moves = ref(0)
+  const targetChips = ref(0)
+  const collectedChips = ref(0)
+  const gameStatus = ref<GameStatus>('playing')
+
+  // State hỗ trợ vuốt
   const activeTile = ref<Tile | null>(null)
   const startPos = ref({ x: 0, y: 0 })
 
   let tileIdCounter = 0
 
-  const initGame = () => {
+  const initBoard = () => {
     board.value = []
-    score.value = 0
     activeTile.value = null
-    isLocked.value = false
 
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS; c++) {
         let randomType = TILE_TYPES[0]!
-
         do {
           randomType = TILE_TYPES[Math.floor(Math.random() * TILE_TYPES.length)]!
         } while (
@@ -53,35 +58,47 @@ export function useGame() {
     }
   }
 
+  // Khởi tạo level cụ thể
+  const startLevel = (lvl: number) => {
+    level.value = lvl
+    // Random moves từ 20 đến 30
+    moves.value = Math.floor(Math.random() * 11) + 20
+    // Lượng chip cần thu thập ~4 chip / move
+    targetChips.value = moves.value * 4
+    collectedChips.value = 0
+    gameStatus.value = 'playing'
+    isLocked.value = false
+    initBoard()
+  }
+
+  const restartGame = () => startLevel(1)
+  const nextLevel = () => startLevel(level.value + 1)
+
   const getTile = (row: number, col: number) => {
     return board.value.find(t => t.row === row && t.col === col && !t.isMatched)
   }
 
-  // Bắt đầu vuốt
   const onPointerDown = (e: PointerEvent, tile: Tile) => {
-    if (isLocked.value || tile.isMatched) return
+    if (isLocked.value || tile.isMatched || gameStatus.value !== 'playing') return
     activeTile.value = tile
     startPos.value = { x: e.clientX, y: e.clientY }
   }
 
-  // Kết thúc vuốt
   const onPointerUp = (e: PointerEvent) => {
-    if (!activeTile.value || isLocked.value) return
+    if (!activeTile.value || isLocked.value || gameStatus.value !== 'playing') return
 
     const deltaX = e.clientX - startPos.value.x
     const deltaY = e.clientY - startPos.value.y
-    const SWIPE_THRESHOLD = 30 // Khoảng cách tối thiểu để ghi nhận 1 cú vuốt (pixel)
+    const SWIPE_THRESHOLD = 30
 
-    // Nếu người dùng có vuốt đủ dài
     if (Math.abs(deltaX) > SWIPE_THRESHOLD || Math.abs(deltaY) > SWIPE_THRESHOLD) {
       let targetRow = activeTile.value.row
       let targetCol = activeTile.value.col
 
-      // Tính toán hướng vuốt (ưu tiên trục có khoảng cách di chuyển dài hơn)
       if (Math.abs(deltaX) > Math.abs(deltaY)) {
-        targetCol += deltaX > 0 ? 1 : -1 // Vuốt ngang
+        targetCol += deltaX > 0 ? 1 : -1
       } else {
-        targetRow += deltaY > 0 ? 1 : -1 // Vuốt dọc
+        targetRow += deltaY > 0 ? 1 : -1
       }
 
       const targetTile = getTile(targetRow, targetCol)
@@ -89,27 +106,23 @@ export function useGame() {
         attemptSwap(activeTile.value, targetTile)
       }
     }
-
-    activeTile.value = null // Reset trạng thái
+    activeTile.value = null
   }
 
-  // Gắn sự kiện global để bắt thao tác thả chuột/tay ngay cả khi vuốt ra ngoài màn hình
   if (typeof window !== 'undefined') {
     useEventListener(window, 'pointerup', onPointerUp)
   }
 
   const attemptSwap = async (t1: Tile, t2: Tile) => {
     isLocked.value = true
-
-    // Đổi vị trí tạm thời
     swapTiles(t1, t2)
     await delay(ANIMATION_DURATION)
 
     const matches = findMatches()
     if (matches.length > 0) {
+      moves.value-- // Trừ 1 move khi swap thành công sinh ra match
       await processMatches(matches)
     } else {
-      // Không có match -> đổi ngược lại
       swapTiles(t1, t2)
       await delay(ANIMATION_DURATION)
       isLocked.value = false
@@ -127,37 +140,30 @@ export function useGame() {
 
   const findMatches = () => {
     const matches = new Set<Tile>()
-
-    // Check hàng ngang
     for (let r = 0; r < GRID_ROWS; r++) {
       for (let c = 0; c < GRID_COLS - 2; c++) {
-        const t1 = getTile(r, c)
-        const t2 = getTile(r, c + 1)
-        const t3 = getTile(r, c + 2)
+        const t1 = getTile(r, c), t2 = getTile(r, c + 1), t3 = getTile(r, c + 2)
         if (t1 && t2 && t3 && t1.typeId === t2.typeId && t1.typeId === t3.typeId) {
           matches.add(t1).add(t2).add(t3)
         }
       }
     }
-
-    // Check hàng dọc
     for (let c = 0; c < GRID_COLS; c++) {
       for (let r = 0; r < GRID_ROWS - 2; r++) {
-        const t1 = getTile(r, c)
-        const t2 = getTile(r + 1, c)
-        const t3 = getTile(r + 2, c)
+        const t1 = getTile(r, c), t2 = getTile(r + 1, c), t3 = getTile(r + 2, c)
         if (t1 && t2 && t3 && t1.typeId === t2.typeId && t1.typeId === t3.typeId) {
           matches.add(t1).add(t2).add(t3)
         }
       }
     }
-
     return Array.from(matches)
   }
 
   const processMatches = async (matches: Tile[]) => {
     matches.forEach(m => m.isMatched = true)
-    score.value += matches.length * 10
+
+    // Mỗi viên đá nổ = 1 chip
+    collectedChips.value += matches.length
     await delay(ANIMATION_DURATION)
 
     board.value = board.value.filter(t => !t.isMatched)
@@ -166,13 +172,9 @@ export function useGame() {
       let emptySpaces = 0
       for (let r = GRID_ROWS - 1; r >= 0; r--) {
         const tile = getTile(r, c)
-        if (!tile) {
-          emptySpaces++
-        } else if (emptySpaces > 0) {
-          tile.row += emptySpaces
-        }
+        if (!tile) emptySpaces++
+        else if (emptySpaces > 0) tile.row += emptySpaces
       }
-
       for (let i = 0; i < emptySpaces; i++) {
         const randomType = TILE_TYPES[Math.floor(Math.random() * TILE_TYPES.length)]!
         board.value.push({
@@ -191,7 +193,19 @@ export function useGame() {
 
     const newMatches = findMatches()
     if (newMatches.length > 0) {
-      await processMatches(newMatches)
+      await processMatches(newMatches) // Đệ quy chuỗi combo
+    } else {
+      checkGameStatus() // Kiểm tra điều kiện thắng thua sau khi MỌI combo đã kết thúc
+    }
+  }
+
+  const checkGameStatus = () => {
+    if (collectedChips.value >= targetChips.value) {
+      gameStatus.value = 'won'
+      isLocked.value = true
+    } else if (moves.value <= 0) {
+      gameStatus.value = 'lost'
+      isLocked.value = true
     } else {
       isLocked.value = false
     }
@@ -201,8 +215,14 @@ export function useGame() {
 
   return {
     board,
-    score,
-    initGame,
+    level,
+    moves,
+    targetChips,
+    collectedChips,
+    gameStatus,
+    startLevel,
+    restartGame,
+    nextLevel,
     onPointerDown
   }
 }
