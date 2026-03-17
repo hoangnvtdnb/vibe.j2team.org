@@ -1,6 +1,6 @@
 import { ref, onUnmounted } from 'vue'
-import { useStorage, useEventListener } from '@vueuse/core'
-import { FRUIT_TYPES, BOARD_WIDTH, BOARD_HEIGHT, GRAVITY, BOUNCE, FRICTION, ENGINE_ITERATIONS, type FruitData } from './config'
+import { useStorage } from '@vueuse/core'
+import { FRUIT_TYPES, BOARD_WIDTH, BOARD_HEIGHT, GRAVITY, BOUNCE, FRICTION, ENGINE_ITERATIONS, type FruitData } from './config.ts'
 
 export interface Fruit {
   id: number
@@ -13,10 +13,76 @@ export interface Fruit {
   icon: string
   colorClass: string
   isMerged: boolean
-  spawnTime: number // Thêm dòng này
+  spawnTime: number
+  hasCollided: boolean // Thêm dòng này: mặc định là false khi mới sinh ra
 }
 
 export type GameStatus = 'idle' | 'playing' | 'gameover'
+
+// --- BỘ TỔNG HỢP ÂM THANH (WEB AUDIO API) ---
+let audioCtx: AudioContext | null = null
+
+const initAudio = () => {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume()
+  }
+}
+
+// 1. Tiếng va chạm "lanh canh" như thủy tinh
+const playGlassSound = (impact: number) => {
+  if (!audioCtx) return
+  if (impact < 1.5) return // Bỏ qua các va chạm quá nhẹ (trượt nhẹ lên nhau)
+
+  const t = audioCtx.currentTime
+  const osc = audioCtx.createOscillator()
+  const gain = audioCtx.createGain()
+
+  osc.type = 'triangle'
+  // Tần số cao ngẫu nhiên (1500Hz - 2000Hz) tạo cảm giác lanh canh
+  osc.frequency.setValueAtTime(1500 + Math.random() * 500, t)
+
+  // Âm lượng dựa vào lực va đập (impact)
+  const vol = Math.min(impact / 15, 0.15)
+  gain.gain.setValueAtTime(vol, t)
+  gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1) // Tắt âm cực nhanh (0.1s)
+
+  osc.connect(gain)
+  gain.connect(audioCtx.destination)
+
+  osc.start(t)
+  osc.stop(t + 0.1)
+}
+
+// 2. Tiếng "tinh tinh" trong trẻo khi Merge
+const playMergeSound = (level: number) => {
+  if (!audioCtx) return
+  const t = audioCtx.currentTime
+
+  const osc = audioCtx.createOscillator()
+  const gain = audioCtx.createGain()
+
+  osc.type = 'sine' // Sóng Sine cho âm thanh cực kỳ tròn trịa, trong trẻo
+
+  // Trái cây level càng cao, cao độ âm thanh càng trầm ấm dần
+  const baseFreq = 1000 + (level * 100)
+
+  // Tạo hiệu ứng 2 nốt nhạc nhanh (Tinh - Tíinh)
+  osc.frequency.setValueAtTime(baseFreq, t)
+  osc.frequency.setValueAtTime(baseFreq * 1.5, t + 0.1)
+
+  gain.gain.setValueAtTime(0, t)
+  gain.gain.linearRampToValueAtTime(0.3, t + 0.02) // Fade in cực nhanh
+  gain.gain.exponentialRampToValueAtTime(0.01, t + 0.4) // Ngân vang nhẹ trong 0.4s
+
+  osc.connect(gain)
+  gain.connect(audioCtx.destination)
+
+  osc.start(t)
+  osc.stop(t + 0.4)
+}
 
 export function useGame() {
 const fruits = ref<Fruit[]>([])
@@ -48,6 +114,8 @@ const fruits = ref<Fruit[]>([])
   }
 
   const dropFruit = () => {
+    initAudio() // Đánh thức hệ thống âm thanh khi user chạm màn hình
+
     if (gameStatus.value !== 'playing') return
 
     const safeX = Math.max(currentFruitType.value.radius, Math.min(BOARD_WIDTH - currentFruitType.value.radius, dropX.value))
@@ -63,7 +131,8 @@ const fruits = ref<Fruit[]>([])
       icon: currentFruitType.value.icon,
       colorClass: currentFruitType.value.color,
       isMerged: false,
-      spawnTime: Date.now() // Ghi nhận thời gian thả
+      spawnTime: Date.now(),
+      hasCollided: false // Khởi tạo chưa va chạm
     })
 
     currentFruitType.value = nextFruitType.value
@@ -176,6 +245,17 @@ const fruits = ref<Fruit[]>([])
             // CHỈ xử lý nảy nếu 2 quả đang lao vào nhau (velAlongNormal < 0)
             // Nếu đang tách nhau ra rồi thì thôi không cộng thêm lực nữa
             if (velAlongNormal < 0) {
+
+              // CHỈ PHÁT ÂM THANH NẾU LÀ LẦN ĐẦU CHẠM NHAU SAU KHI THẢ
+              // Nếu f1 hoặc f2 là quả mới thả (hasCollided === false)
+              if (!f1.hasCollided || !f2.hasCollided) {
+                playGlassSound(Math.abs(velAlongNormal))
+
+                // Đánh dấu để lần sau chạm tiếp (khi đang nằm im) sẽ không kêu nữa
+                f1.hasCollided = true
+                f2.hasCollided = true
+              }
+
               // Hệ số nảy (Bounciness): Game này cần cảm giác nặng, squishy nên set rất thấp (0.1)
               const e = 0.1
 
@@ -207,6 +287,9 @@ const fruits = ref<Fruit[]>([])
     if (nextTypeIndex < FRUIT_TYPES.length) {
       const nextType = FRUIT_TYPES[nextTypeIndex]!
 
+      // PHÁT ÂM THANH MERGE (Truyền vào id của trái cây để điều chỉnh cao độ)
+      playMergeSound(nextType.id)
+
       score.value += nextType.score
       if (score.value > highScore.value) {
         highScore.value = score.value
@@ -225,7 +308,8 @@ const fruits = ref<Fruit[]>([])
         icon: nextType.icon,
         colorClass: nextType.color,
         isMerged: false,
-        spawnTime: Date.now() // Ghi nhận thời gian sinh ra do merge
+        spawnTime: Date.now(),
+        hasCollided: false // Khởi tạo chưa va chạm
       })
     }
   }

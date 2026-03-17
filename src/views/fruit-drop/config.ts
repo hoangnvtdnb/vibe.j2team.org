@@ -1,14 +1,21 @@
-export const ENGINE_ITERATIONS = 5 // Số lần tính toán va chạm mỗi frame để tránh xuyên thấu
+export const ENGINE_ITERATIONS = 5
 export const GRAVITY = 0.4
-export const FRICTION = 0.1
-export const BOUNCE = 0.05
-
-// Kích thước khu vực chơi mô phỏng
+export const FRICTION = 0.85
+export const BOUNCE = 0.3
 export const BOARD_WIDTH = 400
 export const BOARD_HEIGHT = 600
 
-// Danh sách các cấp độ (Fruit)
-export const FRUIT_TYPES = [
+// 1. Thêm Interface này
+export interface FruitData {
+  id: number
+  icon: string
+  color: string
+  radius: number
+  score: number
+}
+
+// 2. Gắn kiểu mảng FruitData[] vào FRUIT_TYPES
+export const FRUIT_TYPES: FruitData[] = [
   { id: 1, icon: '🍒', color: 'text-red-400', radius: 15, score: 2 },
   { id: 2, icon: '🍓', color: 'text-rose-500', radius: 22, score: 4 },
   { id: 3, icon: '🍇', color: 'text-purple-400', radius: 30, score: 8 },
